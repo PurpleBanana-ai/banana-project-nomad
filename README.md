@@ -1,3 +1,5 @@
+# Warning - This is just a copy of Project Nomad - Please see Crosstalk Soultuions Below for Released Version
+
 <div align="center">
 <img src="https://raw.githubusercontent.com/Crosstalk-Solutions/project-nomad/refs/heads/main/admin/public/project_nomad_logo.png" width="200" height="200"/>
 
