@@ -532,9 +532,12 @@ export class RagService {
       }
     }
 
-    // Count unique articles processed in this batch
+    // Count unique articles processed in this batch. hasMoreBatches gates on the article
+    // count — zimChunks.length counts section-level chunks (multiple per article under the
+    // 'structured' strategy), so comparing it to ZIM_BATCH_SIZE (an article limit) caps
+    // processing at the first batch for any real archive.
     const articlesInBatch = new Set(zimChunks.map((c) => c.documentId)).size
-    const hasMoreBatches = zimChunks.length === ZIM_BATCH_SIZE
+    const hasMoreBatches = articlesInBatch >= ZIM_BATCH_SIZE
 
     logger.info(
       `[RAG] Successfully embedded ${totalChunks} total chunks from ${articlesInBatch} articles (hasMore: ${hasMoreBatches})`
@@ -1013,6 +1016,16 @@ export class RagService {
    * Retrieve all unique source files that have been stored in the knowledge base.
    * @returns Array of unique full source paths
    */
+  public async hasDocuments(): Promise<boolean> {
+    try {
+      await this._ensureCollection(RagService.CONTENT_COLLECTION_NAME, RagService.EMBEDDING_DIMENSION)
+      const collectionInfo = await this.qdrant!.getCollection(RagService.CONTENT_COLLECTION_NAME)
+      return (collectionInfo.points_count ?? 0) > 0
+    } catch {
+      return false
+    }
+  }
+
   public async getStoredFiles(): Promise<string[]> {
     try {
       await this._ensureCollection(
@@ -1242,8 +1255,12 @@ export class RagService {
 
       logger.info(`[RAG] Found ${sourcesInQdrant.size} unique sources in Qdrant`)
 
-      // Find files that are in storage but not in Qdrant
-      const filesToEmbed = filesInStorage.filter((filePath) => !sourcesInQdrant.has(filePath))
+      // Find files that are in storage, not already in Qdrant, and have an embeddable type.
+      // Non-embeddable files (e.g. kiwix-library.xml in /storage/zim) would otherwise be
+      // dispatched to EmbedFileJob, fail with "Unsupported file type", and retry on every sync.
+      const filesToEmbed = filesInStorage.filter(
+        (filePath) => !sourcesInQdrant.has(filePath) && determineFileType(filePath) !== 'unknown'
+      )
 
       logger.info(`[RAG] Found ${filesToEmbed.length} files that need embedding`)
 

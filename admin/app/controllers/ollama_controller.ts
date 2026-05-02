@@ -8,7 +8,7 @@ import { modelNameSchema } from '#validators/download'
 import { chatSchema, getAvailableModelsSchema } from '#validators/ollama'
 import { inject } from '@adonisjs/core'
 import type { HttpContext } from '@adonisjs/core/http'
-import { DEFAULT_QUERY_REWRITE_MODEL, RAG_CONTEXT_LIMITS, SYSTEM_PROMPTS } from '../../constants/ollama.js'
+import { RAG_CONTEXT_LIMITS, SYSTEM_PROMPTS } from '../../constants/ollama.js'
 import { SERVICE_NAMES } from '../../constants/service_names.js'
 import logger from '@adonisjs/core/services/logger'
 type Message = { role: 'system' | 'user' | 'assistant'; content: string }
@@ -59,7 +59,7 @@ export default class OllamaController {
 
       // Query rewriting for better RAG retrieval with manageable context
       // Will return user's latest message if no rewriting is needed
-      const rewrittenQuery = await this.rewriteQueryWithContext(reqData.messages)
+      const rewrittenQuery = await this.rewriteQueryWithContext(reqData.messages, reqData.model)
 
       logger.debug(`[OllamaController] Rewritten query for RAG: "${rewrittenQuery}"`)
       if (rewrittenQuery) {
@@ -157,7 +157,7 @@ export default class OllamaController {
           await this.chatService.addMessage(sessionId, 'assistant', fullContent)
           const messageCount = await this.chatService.getMessageCount(sessionId)
           if (messageCount <= 2 && userContent) {
-            this.chatService.generateTitle(sessionId, userContent, fullContent).catch((err) => {
+            this.chatService.generateTitle(sessionId, userContent, fullContent, reqData.model).catch((err) => {
               logger.error(`[OllamaController] Title generation failed: ${err instanceof Error ? err.message : err}`)
             })
           }
@@ -172,7 +172,7 @@ export default class OllamaController {
         await this.chatService.addMessage(sessionId, 'assistant', result.message.content)
         const messageCount = await this.chatService.getMessageCount(sessionId)
         if (messageCount <= 2 && userContent) {
-          this.chatService.generateTitle(sessionId, userContent, result.message.content).catch((err) => {
+          this.chatService.generateTitle(sessionId, userContent, result.message.content, reqData.model).catch((err) => {
             logger.error(`[OllamaController] Title generation failed: ${err instanceof Error ? err.message : err}`)
           })
         }
@@ -212,13 +212,21 @@ export default class OllamaController {
       return response.status(404).send({ success: false, message: 'Ollama service record not found.' })
     }
 
-    // Clear path: null or empty URL removes remote config and marks service as not installed
+    // Clear path: null or empty URL removes remote config. If a local nomad_ollama container
+    // still exists (user had previously installed AI Assistant locally), restart it and keep
+    // the service marked installed. Otherwise fall back to uninstalled.
     if (!remoteUrl || remoteUrl.trim() === '') {
       await KVStore.clearValue('ai.remoteOllamaUrl')
-      ollamaService.installed = false
+      const hasLocalContainer = await this._startLocalOllamaContainerIfExists()
+      ollamaService.installed = hasLocalContainer
       ollamaService.installation_status = 'idle'
       await ollamaService.save()
-      return { success: true, message: 'Remote Ollama configuration cleared.' }
+      return {
+        success: true,
+        message: hasLocalContainer
+          ? 'Remote Ollama cleared. Local Ollama container restored.'
+          : 'Remote Ollama configuration cleared.',
+      }
     }
 
     // Validate URL format
@@ -253,6 +261,10 @@ export default class OllamaController {
     ollamaService.installation_status = 'idle'
     await ollamaService.save()
 
+    // Stop the local nomad_ollama container (if running) so it doesn't compete with the
+    // remote host for GPU / port 11434. Preserves the container and its models volume.
+    await this._stopLocalOllamaContainer()
+
     // Install Qdrant if not already installed (fire-and-forget)
     const qdrantService = await Service.query().where('service_name', SERVICE_NAMES.QDRANT).first()
     if (qdrantService && !qdrantService.installed) {
@@ -268,6 +280,50 @@ export default class OllamaController {
     })
 
     return { success: true, message: 'Remote Ollama configured.' }
+  }
+
+  private async _stopLocalOllamaContainer(): Promise<void> {
+    try {
+      const containers = await this.dockerService.docker.listContainers({ all: true })
+      const ollamaContainer = containers.find((c) =>
+        c.Names.includes(`/${SERVICE_NAMES.OLLAMA}`)
+      )
+      if (!ollamaContainer || ollamaContainer.State !== 'running') {
+        return
+      }
+      await this.dockerService.docker.getContainer(ollamaContainer.Id).stop()
+      this.dockerService.invalidateServicesStatusCache()
+      logger.info('[OllamaController] Stopped local nomad_ollama (remote Ollama configured)')
+    } catch (error: any) {
+      logger.error(
+        { err: error },
+        '[OllamaController] Failed to stop local nomad_ollama; remote Ollama is still active'
+      )
+    }
+  }
+
+  private async _startLocalOllamaContainerIfExists(): Promise<boolean> {
+    try {
+      const containers = await this.dockerService.docker.listContainers({ all: true })
+      const ollamaContainer = containers.find((c) =>
+        c.Names.includes(`/${SERVICE_NAMES.OLLAMA}`)
+      )
+      if (!ollamaContainer) {
+        return false
+      }
+      if (ollamaContainer.State !== 'running') {
+        await this.dockerService.docker.getContainer(ollamaContainer.Id).start()
+        this.dockerService.invalidateServicesStatusCache()
+        logger.info('[OllamaController] Started local nomad_ollama (remote Ollama cleared)')
+      }
+      return true
+    } catch (error: any) {
+      logger.error(
+        { err: error },
+        '[OllamaController] Failed to start local nomad_ollama on remote clear'
+      )
+      return false
+    }
   }
 
   async deleteModel({ request }: HttpContext) {
@@ -312,9 +368,18 @@ export default class OllamaController {
   }
 
   private async rewriteQueryWithContext(
-    messages: Message[]
+    messages: Message[],
+    model: string
   ): Promise<string | null> {
+    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user')
+
     try {
+      // Skip the entire RAG pipeline if there are no documents to search
+      const hasDocuments = await this.ragService.hasDocuments()
+      if (!hasDocuments) {
+        return null
+      }
+
       // Get recent conversation history (last 6 messages for 3 turns)
       const recentMessages = messages.slice(-6)
 
@@ -322,7 +387,7 @@ export default class OllamaController {
       // little RAG benefit until there is enough context to matter.
       const userMessages = recentMessages.filter(msg => msg.role === 'user')
       if (userMessages.length <= 2) {
-        return userMessages[userMessages.length - 1]?.content || null
+        return lastUserMessage?.content || null
       }
 
       const conversationContext = recentMessages
@@ -336,17 +401,8 @@ export default class OllamaController {
         })
         .join('\n')
 
-      const installedModels = await this.ollamaService.getModels(true)
-      const rewriteModelAvailable = installedModels?.some(model => model.name === DEFAULT_QUERY_REWRITE_MODEL)
-      if (!rewriteModelAvailable) {
-        logger.warn(`[RAG] Query rewrite model "${DEFAULT_QUERY_REWRITE_MODEL}" not available. Skipping query rewriting.`)
-        const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user')
-        return lastUserMessage?.content || null
-      }
-
-      // FUTURE ENHANCEMENT: allow the user to specify which model to use for rewriting
       const response = await this.ollamaService.chat({
-        model: DEFAULT_QUERY_REWRITE_MODEL,
+        model,
         messages: [
           {
             role: 'system',
@@ -367,7 +423,6 @@ export default class OllamaController {
         `[RAG] Query rewriting failed: ${error instanceof Error ? error.message : error}`
       )
       // Fallback to last user message if rewriting fails
-      const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user')
       return lastUserMessage?.content || null
     }
   }
