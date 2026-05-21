@@ -3,6 +3,94 @@
 ## Version 1.31.1 - April 21, 2026
 
 ### Features
+- feat(content): custom ZIM library sources with pre-seeded mirrors (#593). Thanks @chriscrosstalk!
+- feat(content-manager): add sortable file size column (#698). Thanks @chriscrosstalk!
+- feat(ai-chat): allow cancelling in-progress model downloads (#701). Thanks @chriscrosstalk!
+- feat(content-updates): show size, surface downloads in Active Downloads (#773). Thanks @chriscrosstalk!
+- feat(maps): regional map downloads via go-pmtiles extract (#780). Thanks @bgauger!
+- feat(maps): show map coordinates on mouse move (#786). Thanks @kennethbrewer3!
+- feat(AI): re-enable AMD GPU acceleration for Ollama via ROCm + HSA override (#804). Thanks @chriscrosstalk!
+- feat(GPU): auto-remediate nomad_ollama passthrough loss on admin boot (#878). Thanks @chriscrosstalk!
+- feat(KB): per-file ingest state machine (Phase 1 of RFC #883) (#888). Thanks @chriscrosstalk!
+- feat(KB): ratio registry for disk + time estimates (Phase 1B of RFC #883) (#891). Thanks @chriscrosstalk!
+- feat(KB): group admin docs into single row in Stored Files (§9) (#892). Thanks @chriscrosstalk!
+- feat(KB): status pill + last-activity on Processing Queue (§5/§10) (#893). Thanks @chriscrosstalk!
+- feat(KB): Always/Manual ingest policy toggle (§1/§4) (#894). Thanks @chriscrosstalk!
+- feat(KB): conditional warnings A + B on Stored Files (§6) (#895). Thanks @chriscrosstalk!
+- feat(KB): surface embedding-disk estimate in curated tier-change modal (§1) (#897). Thanks @chriscrosstalk!
+- feat(KB): first-chat JIT prompt for ingest policy (Phase 3 task 12) (#899). Thanks @chriscrosstalk!
+- feat(KB): wizard AI policy step (Phase 3 task 13) (#900). Thanks @chriscrosstalk!
+- feat(KB): guardrail modal at 50GB / 10%-free thresholds (§7) (#901). Thanks @chriscrosstalk!
+- feat(easy-setup): split AI into its own conditional step (#908). Thanks @chriscrosstalk!
+- feat(KB): per-file ingest action + state indicator on Stored Files (§5) (#909). Thanks @chriscrosstalk!
+- feat(chat): confirm-on-switch + one-chat-model-at-a-time enforcement (#916). Thanks @chriscrosstalk!
+
+### Bug Fixes
+- fix(downloads): stage downloads to .tmp to prevent Kiwix loading partial files (#448). Thanks @artbird309!
+- fix(security): close remaining security audit items 3 & 4 (CWE-918, CWE-209) (#552). Thanks @LuisMIguelFurlanettoSousa!
+- fix(ai-chat): add null check to model name (#645). Thanks @hestela!
+- fix(ai-chat): qwen2.5 loading on every chat message (#649). Thanks @hestela!
+- fix(disk-collector): fix storage reporting for NFS mounts (#686). Thanks @bgauger!
+- fix(rag): add start button in kb modal and ensure restart policy exists (#700). Thanks @hestela!
+- fix(admin): only hide global map banner after download (#702). Thanks @Gujiassh!
+- fix(maps): wire delete confirmation to API (#732). Thanks @cuyua9!
+- fix: prevent ZIM corrupt file crash and deduplicate Ollama download logs (#741). Thanks @jakeaturner!
+- fix(ai): stop local nomad_ollama when remote Ollama is configured (#744). Thanks @chriscrosstalk!
+- fix(rag): repair ZIM embedding pipeline (sync filter, batch gate, DOM walk) (#745). Thanks @chriscrosstalk!
+- fix(zim): accumulate across Kiwix pages to prevent empty Content Explorer (#746). Thanks @chriscrosstalk!
+- fix(qdrant): disable anonymous telemetry by default (#747). Thanks @chriscrosstalk!
+- fix(disk-display): gate NAS Storage label on network filesystem type (#749). Thanks @bgauger!
+- fix(docker): write /app/version.json from VERSION build-arg (#754). Thanks @chriscrosstalk!
+- fix(rag): pass num_ctx and truncate to Ollama embed call (#763). Thanks @chriscrosstalk!
+- fix(api): accept notes, marker_type, and position on markers endpoints (#770). Thanks @jrsphoto!
+- fix(install): warn loudly on non-x86_64 architectures before pulling images (#797). Thanks @chriscrosstalk!
+- fix(stream): skip compression for Server-Sent Events (#798). Thanks @chriscrosstalk!
+- fix(maps): Country Picker UX polish + auto-refresh stored files (#817). Thanks @chriscrosstalk!
+- fix(System): self-heal stale updateAvailable flag after sidecar-driven update (#825). Thanks @jakeaturner!
+- fix(settings/update): four UI/UX fixes for the System Update page (#827). Thanks @chriscrosstalk!
+- fix(Maps): send filename instead of full path to delete endpoint (#829). Thanks @bgauger!
+- fix(Maps): render notes in marker popup when populated (#830). Thanks @chriscrosstalk!
+- fix(AI): vendor-aware AMD HSA override + benchmark discrete-GPU detection (#832). Thanks @chriscrosstalk!
+- fix(System): correct NVIDIA VRAM in Graphics card (#850). Thanks @bgauger!
+- fix(Downloads): treat missing Content-Type as octet-stream (#859). Thanks @bgauger!
+- fix(AI): preserve semver tag in DB on AMD Ollama updates (#868). Thanks @chriscrosstalk!
+- fix(AI): rewrite RAG query on first chat follow-up (#869). Thanks @chriscrosstalk!
+- fix(RAG): unbreak multi-batch ZIM ingestion (jobId dedupe) (#872). Thanks @chriscrosstalk!
+- fix(RAG): pace continuation batches when embedding is CPU-only (#873). Thanks @chriscrosstalk!
+- fix(queue): singleton QueueService to stop ioredis connection leak (#877). Thanks @chriscrosstalk!
+- fix(System): correct AMD VRAM in Graphics card + harden log probe (#879). Thanks @chriscrosstalk!
+- fix(RAG): report ZIM ingestion progress in overall-file frame (#880). Thanks @chriscrosstalk!
+- fix(KB): add re-embed and reset & rebuild options to fix broken embeddings (#886). Thanks @jakeaturner!
+- fix(ZIM): preserve co-existing Wikipedia corpora on cleanup (#887). Thanks @chriscrosstalk!
+- fix(RAG): anchor continuation-batch initial progress to overall-file frame (#889). Thanks @chriscrosstalk!
+- fix(AI): pre-cap embed input + log fallback reason (#890). Thanks @chriscrosstalk!
+- fix(KB): remove redundant Refresh button from Processing Queue (#896). Thanks @chriscrosstalk!
+- fix(KB): union Stored Files list with state-machine file paths (#898). Thanks @chriscrosstalk!
+- fix(KB): blank-screen on panel open + tooltips on bulk-action buttons (#907). Thanks @chriscrosstalk!
+- fix(KB): TierSelectionModal hook order + register IconLibrary (#917). Thanks @chriscrosstalk!
+- fix(content): show selected tier on cards while downloads are in flight (#918). Thanks @chriscrosstalk!
+- fix(KB): respect Manual ingest policy on post-download dispatch (#919). Thanks @chriscrosstalk!
+- fix(AI): improve remote Ollama url validation to prevent SSRF vuln (#920). Thanks @jakeaturner!
+- fix(models): correct inverted belongsTo keys on ChatMessage.session (#921). Thanks @jakeaturner!
+
+### Improvements
+- docs: add Community Add-Ons page with field manuals + W3Schools packs (#753). Thanks @chriscrosstalk!
+- docs: add map marker API reference (#783). Thanks @kennethbrewer3!
+- docs: require linked issue for non-trivial PRs (#799). Thanks @chriscrosstalk!
+- docs(map): updated notes on the map pin api (#803). Thanks @kennethbrewer3!
+- docs: link to new WSL2 install guide from README and FAQ (#811). Thanks @chriscrosstalk!
+- build(deps): bump picomatch in /admin (#544). Thanks @dependabot[bot]!
+- build(deps): bump lodash from 4.17.23 to 4.18.1 in /admin (#643). Thanks @dependabot[bot]!
+- build(deps-dev): bump vite from 6.4.1 to 6.4.2 in /admin (#677). Thanks @dependabot[bot]!
+- build(deps): bump axios from 1.13.5 to 1.15.0 in /admin (#708). Thanks @dependabot[bot]!
+- build(deps): bump @adonisjs/http-server from 7.8.0 to 7.8.1 in /admin (#724). Thanks @dependabot[bot]!
+- build(deps): bump follow-redirects from 1.15.11 to 1.16.0 in /admin (#729). Thanks @dependabot[bot]!
+- build(deps): bump protocol-buffers-schema from 3.6.0 to 3.6.1 in /admin (#736). Thanks @dependabot[bot]!
+- build(deps): bump protobufjs from 7.5.4 to 7.5.5 in /admin (#737). Thanks @dependabot[bot]!
+
+## Version 1.31.1 - April 21, 2026
+
+### Features
 
 ### Bug Fixes
 - **AI Assistant**: In-progress model downloads can now be cancelled properly and the progress UI now matches that of file downloads. Thanks @chriscrosstalk for the contribution!
